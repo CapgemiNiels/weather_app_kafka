@@ -3,31 +3,53 @@ package nh.weather_app_kafka.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import nh.weather_app_kafka.model.CurrentWeather;
 import nh.weather_app_kafka.model.WeatherResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class WeatherService {
 
-   private final RestTemplate restTemplate;
-   private final ObjectMapper objectMapper;
+    @Value("${kafka.topic.name}")
+    private String topicName;
 
-   @Autowired
-   public WeatherService(RestTemplate restTemplate, ObjectMapper objectMapper) {
-      this.restTemplate = restTemplate;
-      this.objectMapper = objectMapper;
-   }
+    @Value("${weather.api.url}")
+    private String apiUrl;
 
-   public void fetchAndDeserializeWeatherData() {
-      try {
-         String apiUrl = "https://api.open-meteo.com/v1/forecast?latitude=51.42&longitude=5.46&current_weather=true";
-         String response = restTemplate.getForObject(apiUrl, String.class);
-         WeatherResponse weatherResponse = objectMapper.readValue(response, WeatherResponse.class);
-         CurrentWeather currentWeather = weatherResponse.getCurrent_weather();
-         System.out.println(currentWeather.toString());
-      } catch (Exception e) {
-         e.printStackTrace();
-      }
-   }
+    Logger logger = LoggerFactory.getLogger(WeatherService.class);
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, CurrentWeather> kafkaTemplate;
+
+    @Autowired
+    public WeatherService(RestTemplate restTemplate, ObjectMapper objectMapper, KafkaTemplate<String, CurrentWeather> kafkaTemplate) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+        this.kafkaTemplate = kafkaTemplate;
+    }
+
+    public void fetchAndDeserializeWeatherData() {
+        try {
+            String response = restTemplate.getForObject(apiUrl, String.class);
+            WeatherResponse weatherResponse = objectMapper.readValue(response, WeatherResponse.class);
+            if (weatherResponse != null && weatherResponse.getCurrent_weather() != null) {
+                CurrentWeather currentWeather = weatherResponse.getCurrent_weather();
+                String key = "weather-data";
+                logger.info("Sending message with key: {} and value: {} to topic: {}", key, currentWeather, topicName);
+                kafkaTemplate.send(topicName, key, currentWeather);
+            } else {
+                logger.error("WeatherResponse or CurrentWeather is null");
+            }
+        } catch (Exception e) {
+            logger.error("Error fetching and sending weather data", e);
+        }
+    }
 }

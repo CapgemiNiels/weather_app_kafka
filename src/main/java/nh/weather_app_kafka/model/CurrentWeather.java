@@ -1,6 +1,12 @@
 package nh.weather_app_kafka.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import java.time.LocalDateTime;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CurrentWeather {
+   private LocalDateTime timestamp;
    private String time;
    private int interval;
    private double temperature;
@@ -65,6 +71,14 @@ public class CurrentWeather {
 
    public void setWeathercode(int weathercode) {
       this.weathercode = weathercode;
+   }
+
+   public LocalDateTime getTimestamp() {
+      return timestamp;
+   }
+
+   public void setTimestamp(LocalDateTime timestamp) {
+      this.timestamp = timestamp;
    }
 
    @Override
