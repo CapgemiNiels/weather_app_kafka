@@ -49,7 +49,7 @@ public class WeatherService {
         }
     }
 
-    private String fetchWeatherData() {
+    String fetchWeatherData() {
         try {
             logger.info("Fetching weather data from API: {}", apiUrl);
             return restTemplate.getForObject(apiUrl, String.class);
@@ -59,7 +59,7 @@ public class WeatherService {
         }
     }
 
-    private CurrentWeather deserializeWeatherData(String response) {
+    CurrentWeather deserializeWeatherData(String response) {
         try {
             logger.info("Deserializing weather data: {}", response);
             WeatherResponse weatherResponse = objectMapper.readValue(response, WeatherResponse.class);
@@ -70,7 +70,7 @@ public class WeatherService {
         }
     }
 
-    private void pushWeatherDataToKafka(CurrentWeather currentWeather) {
+    void pushWeatherDataToKafka(CurrentWeather currentWeather) {
         try {
             String key = "weather-data";
             logger.info("Sending message with key: {} and value: {} to topic: {}", key, currentWeather, topicName);
