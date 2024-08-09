@@ -2,17 +2,19 @@ package nh.weather_app_kafka.model;
 
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class WeatherResponse {
-   private CurrentWeather current_weather;
+   @JsonProperty("current_weather")
+   private CurrentWeather currentWeather;
 
    // Getter and Setter
-   public CurrentWeather getCurrent_weather() {
-      return current_weather;
+   public CurrentWeather getCurrentWeather() {
+      return currentWeather;
    }
 
-   public void setCurrent_weather(CurrentWeather current_weather) {
-      this.current_weather = current_weather;
+   public void setCurrentWeather(CurrentWeather currentWeather) {
+      this.currentWeather = currentWeather;
    }
 }

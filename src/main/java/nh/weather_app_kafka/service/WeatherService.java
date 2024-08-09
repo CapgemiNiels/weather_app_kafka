@@ -11,9 +11,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 @Service
 public class WeatherService {
 
@@ -37,19 +34,49 @@ public class WeatherService {
     }
 
     public void fetchAndDeserializeWeatherData() {
-        try {
-            String response = restTemplate.getForObject(apiUrl, String.class);
-            WeatherResponse weatherResponse = objectMapper.readValue(response, WeatherResponse.class);
-            if (weatherResponse != null && weatherResponse.getCurrent_weather() != null) {
-                CurrentWeather currentWeather = weatherResponse.getCurrent_weather();
-                String key = "weather-data";
-                logger.info("Sending message with key: {} and value: {} to topic: {}", key, currentWeather, topicName);
-                kafkaTemplate.send(topicName, key, currentWeather);
+        logger.info("Starting fetchAndDeserializeWeatherData");
+        String response = fetchWeatherData();
+        logger.info("Fetched response: {}", response);
+        if (response != null) {
+            CurrentWeather currentWeather = deserializeWeatherData(response);
+            if (currentWeather != null) {
+                pushWeatherDataToKafka(currentWeather);
             } else {
-                logger.error("WeatherResponse or CurrentWeather is null");
+                logger.error("Deserialized CurrentWeather is null");
             }
+        } else {
+            logger.error("Fetched response is null");
+        }
+    }
+
+    private String fetchWeatherData() {
+        try {
+            logger.info("Fetching weather data from API: {}", apiUrl);
+            return restTemplate.getForObject(apiUrl, String.class);
         } catch (Exception e) {
-            logger.error("Error fetching and sending weather data", e);
+            logger.error("Error fetching weather data", e);
+            return null;
+        }
+    }
+
+    private CurrentWeather deserializeWeatherData(String response) {
+        try {
+            logger.info("Deserializing weather data: {}", response);
+            WeatherResponse weatherResponse = objectMapper.readValue(response, WeatherResponse.class);
+            return weatherResponse.getCurrentWeather();
+        } catch (Exception e) {
+            logger.error("Error deserializing weather data", e);
+            return null;
+        }
+    }
+
+    private void pushWeatherDataToKafka(CurrentWeather currentWeather) {
+        try {
+            String key = "weather-data";
+            logger.info("Sending message with key: {} and value: {} to topic: {}", key, currentWeather, topicName);
+            kafkaTemplate.send(topicName, key, currentWeather);
+        } catch (Exception e) {
+            logger.error("Error pushing weather data to Kafka", e);
         }
     }
 }
