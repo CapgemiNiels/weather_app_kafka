@@ -22,3 +22,6 @@ and remove the entire container with\
 
 ### start the app
 run the WeatherAppKafkaApplication class in your IDE
+
+### open the kafka-ui in your browser
+http://localhost:7777/ opens the UI
