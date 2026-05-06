@@ -24,6 +24,9 @@
 .idea/**/dictionaries
 .idea/**/shelf
 
+# AI Prompts
+prompts
+
 # AWS User-specific
 .idea/**/aws.xml
 

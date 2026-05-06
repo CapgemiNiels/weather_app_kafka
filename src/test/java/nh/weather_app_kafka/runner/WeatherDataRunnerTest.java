@@ -1,16 +1,16 @@
 package nh.weather_app_kafka.runner;
 
 import nh.weather_app_kafka.service.WeatherService;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+@ExtendWith(MockitoExtension.class)
 class WeatherDataRunnerTest {
 
     @Mock
@@ -19,26 +19,17 @@ class WeatherDataRunnerTest {
     @InjectMocks
     private WeatherDataRunner weatherDataRunner;
 
-    @BeforeEach
-    public void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
     @Test
-    void testRun() throws Exception {
-        // Act
+    void runInvokesWeatherFetchOnce() throws Exception {
         weatherDataRunner.run();
 
-        // Assert
         verify(weatherService, times(1)).fetchAndDeserializeWeatherData();
     }
 
     @Test
-    void testScheduledFetchWeatherData() {
-        // Act
+    void fetchWeatherDataInvokesWeatherFetchOnce() {
         weatherDataRunner.fetchWeatherData();
 
-        // Assert
         verify(weatherService, times(1)).fetchAndDeserializeWeatherData();
     }
 }
