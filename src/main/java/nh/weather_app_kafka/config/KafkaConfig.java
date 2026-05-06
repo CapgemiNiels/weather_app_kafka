@@ -40,6 +40,11 @@ public class KafkaConfig {
 
     @Bean
     public NewTopic weatherInputTopic() {
-        return new NewTopic(topicName, 3, (short) 1);
+
+        Map<String, String> config = new HashMap<>();
+        config.put("max.message.bytes", "2000000");
+
+        return new NewTopic(topicName, 3, (short) 1)
+                .configs(config);
     }
 }

@@ -5,7 +5,6 @@ import nh.weather_app_kafka.model.CurrentWeather;
 import nh.weather_app_kafka.model.WeatherResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -14,19 +13,19 @@ import org.springframework.web.client.RestTemplate;
 @Service
 public class WeatherService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(WeatherService.class);
+    private static final String WEATHER_DATA_KEY = "weather-data";
+
     @Value("${kafka.topic.name}")
     private String topicName;
 
     @Value("${weather.api.url}")
     private String apiUrl;
 
-    Logger logger = LoggerFactory.getLogger(WeatherService.class);
-
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, CurrentWeather> kafkaTemplate;
 
-    @Autowired
     public WeatherService(RestTemplate restTemplate, ObjectMapper objectMapper, KafkaTemplate<String, CurrentWeather> kafkaTemplate) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
@@ -34,49 +33,48 @@ public class WeatherService {
     }
 
     public void fetchAndDeserializeWeatherData() {
-        logger.info("Starting fetchAndDeserializeWeatherData");
+        LOGGER.info("Starting fetchAndDeserializeWeatherData");
         String response = fetchWeatherData();
-        logger.info("Fetched response: {}", response);
+        LOGGER.info("Fetched response: {}", response);
         if (response != null) {
             CurrentWeather currentWeather = deserializeWeatherData(response);
             if (currentWeather != null) {
                 pushWeatherDataToKafka(currentWeather);
             } else {
-                logger.error("Deserialized CurrentWeather is null");
+                LOGGER.error("Deserialized CurrentWeather is null");
             }
         } else {
-            logger.error("Fetched response is null");
+            LOGGER.error("Fetched response is null");
         }
     }
 
     String fetchWeatherData() {
         try {
-            logger.info("Fetching weather data from API: {}", apiUrl);
+            LOGGER.info("Fetching weather data from API: {}", apiUrl);
             return restTemplate.getForObject(apiUrl, String.class);
         } catch (Exception e) {
-            logger.error("Error fetching weather data", e);
+            LOGGER.error("Error fetching weather data", e);
             return null;
         }
     }
 
     CurrentWeather deserializeWeatherData(String response) {
         try {
-            logger.info("Deserializing weather data: {}", response);
+            LOGGER.info("Deserializing weather data: {}", response);
             WeatherResponse weatherResponse = objectMapper.readValue(response, WeatherResponse.class);
             return weatherResponse.getCurrentWeather();
         } catch (Exception e) {
-            logger.error("Error deserializing weather data", e);
+            LOGGER.error("Error deserializing weather data", e);
             return null;
         }
     }
 
     void pushWeatherDataToKafka(CurrentWeather currentWeather) {
         try {
-            String key = "weather-data";
-            logger.info("Sending message with key: {} and value: {} to topic: {}", key, currentWeather, topicName);
-            kafkaTemplate.send(topicName, key, currentWeather);
+            LOGGER.info("Sending message with key: {} and value: {} to topic: {}", WEATHER_DATA_KEY, currentWeather, topicName);
+            kafkaTemplate.send(topicName, WEATHER_DATA_KEY, currentWeather);
         } catch (Exception e) {
-            logger.error("Error pushing weather data to Kafka", e);
+            LOGGER.error("Error pushing weather data to Kafka", e);
         }
     }
 }
