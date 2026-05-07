@@ -9,17 +9,24 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.concurrent.CompletableFuture;
+
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @SpringBootTest(classes = WeatherAppKafkaApplication.class, properties = {
         "spring.task.scheduling.enabled=false",
+        "weather.fetch.run-on-startup=false",
         "spring.kafka.bootstrap-servers=127.0.0.1:19092",
         "kafka.topic.name=weather-test-topic",
         "weather.api.url=https://example.test/weather"
@@ -56,10 +63,16 @@ class WeatherServiceIntegrationTest {
 
         when(restTemplate.getForObject(API_URL, String.class)).thenReturn(RESPONSE);
         when(objectMapper.readValue(RESPONSE, WeatherResponse.class)).thenReturn(weatherResponse);
+        when(kafkaTemplate.send(eq(TOPIC_NAME), anyString(), eq(currentWeather)))
+                .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
 
         weatherService.fetchAndDeserializeWeatherData();
 
-        verify(kafkaTemplate, times(1)).send(eq(TOPIC_NAME), eq("weather-data"), eq(currentWeather));
+        verify(kafkaTemplate, times(1)).send(
+                eq(TOPIC_NAME),
+                argThat(key -> key != null && key.matches("weather-data-\\d{13}")),
+                eq(currentWeather)
+        );
     }
 }
 

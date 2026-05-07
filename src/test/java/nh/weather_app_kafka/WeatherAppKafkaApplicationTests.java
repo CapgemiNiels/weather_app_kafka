@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(properties = {
         "spring.task.scheduling.enabled=false",
+        "weather.fetch.run-on-startup=false",
         "spring.kafka.bootstrap-servers=127.0.0.1:19092",
         "kafka.topic.name=weather-test-topic",
         "weather.api.url=https://example.test/weather"

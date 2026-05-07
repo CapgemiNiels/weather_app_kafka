@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ModelJsonMappingTest {
 
@@ -54,6 +55,19 @@ class ModelJsonMappingTest {
         assertNotNull(weatherResponse.getCurrentWeather());
         assertEquals("2026-05-06T10:30", weatherResponse.getCurrentWeather().getTime());
         assertEquals(10.5, weatherResponse.getCurrentWeather().getTemperature());
+    }
+
+    @Test
+    void currentWeatherToStringContainsKeyFieldsForDebugging() {
+        CurrentWeather currentWeather = new CurrentWeather();
+        currentWeather.setTime("2026-05-06T10:30");
+        currentWeather.setTemperature(10.5);
+
+        String value = currentWeather.toString();
+
+        assertNotNull(value);
+        assertTrue(value.contains("time='2026-05-06T10:30'"));
+        assertTrue(value.contains("temperature=10.5"));
     }
 }
 

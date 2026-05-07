@@ -1,29 +1,36 @@
 package nh.weather_app_kafka.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import nh.weather_app_kafka.model.CurrentWeather;
 import nh.weather_app_kafka.model.WeatherResponse;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClientException;
+
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.Mockito.doThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
 class WeatherServiceTest {
@@ -41,13 +48,11 @@ class WeatherServiceTest {
     @Mock
     private RestTemplate restTemplate;
 
-    @InjectMocks
     private WeatherService weatherService;
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(weatherService, "apiUrl", API_URL);
-        ReflectionTestUtils.setField(weatherService, "topicName", TOPIC_NAME);
+        weatherService = new WeatherService(restTemplate, objectMapper, kafkaTemplate, TOPIC_NAME, API_URL);
     }
 
     @Test
@@ -58,13 +63,15 @@ class WeatherServiceTest {
 
         when(restTemplate.getForObject(API_URL, String.class)).thenReturn(RESPONSE);
         when(objectMapper.readValue(RESPONSE, WeatherResponse.class)).thenReturn(weatherResponse);
+        when(kafkaTemplate.send(eq(TOPIC_NAME), anyString(), eq(currentWeather)))
+                .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
 
         weatherService.fetchAndDeserializeWeatherData();
 
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<CurrentWeather> valueCaptor = ArgumentCaptor.forClass(CurrentWeather.class);
         verify(kafkaTemplate, times(1)).send(eq(TOPIC_NAME), keyCaptor.capture(), valueCaptor.capture());
-        assertEquals("weather-data", keyCaptor.getValue());
+        assertTrue(keyCaptor.getValue().matches("weather-data-\\d{13}"));
         assertEquals(currentWeather, valueCaptor.getValue());
     }
 
@@ -74,7 +81,16 @@ class WeatherServiceTest {
 
         weatherService.fetchAndDeserializeWeatherData();
 
-        verify(kafkaTemplate, never()).send(eq(TOPIC_NAME), eq("weather-data"), org.mockito.ArgumentMatchers.any(CurrentWeather.class));
+        verify(kafkaTemplate, never()).send(eq(TOPIC_NAME), anyString(), any(CurrentWeather.class));
+    }
+
+    @Test
+    void fetchAndDeserializeWeatherDataDoesNotPublishWhenApiReturnsBlank() {
+        when(restTemplate.getForObject(API_URL, String.class)).thenReturn("   ");
+
+        weatherService.fetchAndDeserializeWeatherData();
+
+        verify(kafkaTemplate, never()).send(eq(TOPIC_NAME), anyString(), any(CurrentWeather.class));
     }
 
     @Test
@@ -86,7 +102,7 @@ class WeatherServiceTest {
 
         weatherService.fetchAndDeserializeWeatherData();
 
-        verify(kafkaTemplate, never()).send(eq(TOPIC_NAME), eq("weather-data"), org.mockito.ArgumentMatchers.any(CurrentWeather.class));
+        verify(kafkaTemplate, never()).send(eq(TOPIC_NAME), anyString(), any(CurrentWeather.class));
     }
 
     @Test
@@ -101,7 +117,7 @@ class WeatherServiceTest {
 
     @Test
     void fetchWeatherDataReturnsNullWhenHttpCallThrows() {
-        when(restTemplate.getForObject(API_URL, String.class)).thenThrow(new RuntimeException("API unavailable"));
+        when(restTemplate.getForObject(API_URL, String.class)).thenThrow(new RestClientException("API unavailable"));
 
         String actualResponse = weatherService.fetchWeatherData();
 
@@ -125,7 +141,8 @@ class WeatherServiceTest {
 
     @Test
     void deserializeWeatherDataReturnsNullWhenJsonIsInvalid() throws Exception {
-        when(objectMapper.readValue(RESPONSE, WeatherResponse.class)).thenThrow(new RuntimeException("Invalid JSON"));
+        when(objectMapper.readValue(RESPONSE, WeatherResponse.class)).thenThrow(new JsonProcessingException("Invalid JSON") {
+        });
 
         CurrentWeather actualCurrentWeather = weatherService.deserializeWeatherData(RESPONSE);
 
@@ -135,22 +152,50 @@ class WeatherServiceTest {
     @Test
     void pushWeatherDataToKafkaSendsExpectedKeyAndPayload() {
         CurrentWeather currentWeather = buildCurrentWeather();
+        when(kafkaTemplate.send(eq(TOPIC_NAME), anyString(), eq(currentWeather)))
+                .thenReturn(CompletableFuture.completedFuture(mock(SendResult.class)));
 
         weatherService.pushWeatherDataToKafka(currentWeather);
 
         ArgumentCaptor<String> keyCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<CurrentWeather> valueCaptor = ArgumentCaptor.forClass(CurrentWeather.class);
         verify(kafkaTemplate, times(1)).send(eq(TOPIC_NAME), keyCaptor.capture(), valueCaptor.capture());
-        assertEquals("weather-data", keyCaptor.getValue());
+        assertTrue(keyCaptor.getValue().matches("weather-data-\\d{13}"));
         assertEquals(currentWeather, valueCaptor.getValue());
     }
 
     @Test
-    void pushWeatherDataToKafkaSwallowsPublishFailureWithoutThrowing() {
+    void pushWeatherDataToKafkaHandlesFailedFutureWithoutThrowing() {
         CurrentWeather currentWeather = buildCurrentWeather();
-        doThrow(new RuntimeException("Kafka unavailable"))
-                .when(kafkaTemplate)
-                .send(TOPIC_NAME, "weather-data", currentWeather);
+        CompletableFuture<SendResult<String, CurrentWeather>> failedFuture = new CompletableFuture<>();
+        failedFuture.completeExceptionally(new RuntimeException("Kafka unavailable"));
+        when(kafkaTemplate.send(eq(TOPIC_NAME), anyString(), eq(currentWeather))).thenReturn(failedFuture);
+
+        assertDoesNotThrow(() -> weatherService.pushWeatherDataToKafka(currentWeather));
+    }
+
+    @Test
+    void pushWeatherDataToKafkaHandlesCompletedFutureWithNullMetadataWithoutThrowing() {
+        CurrentWeather currentWeather = buildCurrentWeather();
+        when(kafkaTemplate.send(eq(TOPIC_NAME), anyString(), eq(currentWeather)))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        assertDoesNotThrow(() -> weatherService.pushWeatherDataToKafka(currentWeather));
+    }
+
+    @Test
+    void pushWeatherDataToKafkaHandlesCompletedFutureWithMetadataWithoutThrowing() {
+        CurrentWeather currentWeather = buildCurrentWeather();
+        RecordMetadata metadata = mock(RecordMetadata.class);
+        when(metadata.topic()).thenReturn(TOPIC_NAME);
+        when(metadata.partition()).thenReturn(0);
+        when(metadata.offset()).thenReturn(42L);
+
+        SendResult<String, CurrentWeather> sendResult = mock(SendResult.class);
+        when(sendResult.getRecordMetadata()).thenReturn(metadata);
+
+        when(kafkaTemplate.send(eq(TOPIC_NAME), anyString(), eq(currentWeather)))
+                .thenReturn(CompletableFuture.completedFuture(sendResult));
 
         assertDoesNotThrow(() -> weatherService.pushWeatherDataToKafka(currentWeather));
     }
