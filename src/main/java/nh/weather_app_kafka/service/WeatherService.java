@@ -2,6 +2,8 @@ package nh.weather_app_kafka.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import nh.weather_app_kafka.avro.CurrentWeatherAvro;
+import nh.weather_app_kafka.mapper.WeatherAvroMapper;
 import nh.weather_app_kafka.model.CurrentWeather;
 import nh.weather_app_kafka.model.WeatherResponse;
 import org.slf4j.Logger;
@@ -12,6 +14,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.concurrent.CompletionException;
 
 @Service
 public class WeatherService {
@@ -23,11 +26,18 @@ public class WeatherService {
     private final String apiUrl;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final KafkaTemplate<String, CurrentWeather> kafkaTemplate;
+    private final WeatherAvroMapper weatherAvroMapper;
+    private final KafkaTemplate<String, CurrentWeatherAvro> kafkaTemplate;
 
-    public WeatherService(RestTemplate restTemplate, ObjectMapper objectMapper, KafkaTemplate<String, CurrentWeather> kafkaTemplate, @org.springframework.beans.factory.annotation.Value("${kafka.topic.name}") String topicName, @org.springframework.beans.factory.annotation.Value("${weather.api.url}") String apiUrl) {
+    public WeatherService(RestTemplate restTemplate,
+                          ObjectMapper objectMapper,
+                          WeatherAvroMapper weatherAvroMapper,
+                          KafkaTemplate<String, CurrentWeatherAvro> kafkaTemplate,
+                          @org.springframework.beans.factory.annotation.Value("${kafka.topic.name}") String topicName,
+                          @org.springframework.beans.factory.annotation.Value("${weather.api.url}") String apiUrl) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
+        this.weatherAvroMapper = weatherAvroMapper;
         this.kafkaTemplate = kafkaTemplate;
         this.topicName = topicName;
         this.apiUrl = apiUrl;
@@ -47,7 +57,8 @@ public class WeatherService {
             return;
         }
 
-        pushWeatherDataToKafka(currentWeather);
+        CurrentWeatherAvro currentWeatherAvro = weatherAvroMapper.map(currentWeather);
+        pushWeatherDataToKafka(currentWeatherAvro);
     }
 
     String fetchWeatherData() {
@@ -80,22 +91,21 @@ public class WeatherService {
         }
     }
 
-    void pushWeatherDataToKafka(CurrentWeather currentWeather) {
+    void pushWeatherDataToKafka(CurrentWeatherAvro currentWeather) {
         String messageKey = WEATHER_DATA_KEY + "-" + String.valueOf(Instant.now().toEpochMilli());
         LOGGER.info("Sending weather message to topic '{}' with key '{}'", topicName, messageKey);
 
-        kafkaTemplate.send(topicName, messageKey, currentWeather).whenComplete((result, ex) -> {
-            if (ex != null) {
-                LOGGER.error("Failed to send weather message to topic '{}'", topicName, ex);
-                return;
-            }
-
+        try {
+            var result = kafkaTemplate.send(topicName, messageKey, currentWeather).join();
             if (result == null || result.getRecordMetadata() == null) {
                 LOGGER.info("Weather message sent successfully (metadata unavailable)");
                 return;
             }
 
             LOGGER.info("Weather message sent successfully: topic={}, partition={}, offset={}", result.getRecordMetadata().topic(), result.getRecordMetadata().partition(), result.getRecordMetadata().offset());
-        });
+        } catch (CompletionException e) {
+            LOGGER.error("Failed to send weather message to topic '{}'", topicName, e);
+            throw new IllegalStateException("Unable to publish weather message", e);
+        }
     }
 }

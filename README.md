@@ -5,13 +5,24 @@ weather app based off youtube series on Kafka from the Quix channel https://www.
 # Startup
 
 ### start docker-compose
-start a new linux terminal and run\
-`sudo docker compose up`
+Run from the project root:
+`docker compose up -d`
+
+Services and ports:
+- Kafka broker: `localhost:9092`
+- Schema Registry: `http://localhost:8081`
+- Kafka UI: `http://localhost:8085`
 
 ### start the app
-run the WeatherAppKafkaApplication class in your IDE
-you can open a terminal to http://localhost:3040 to get a UI for kafka\
-from there look up the topic 'weather_input' and see the messages coming in.
+Run `WeatherAppKafkaApplication` in your IDE.
+
+The producer publishes Avro records to topic `weather_input` using:
+- `KafkaAvroSerializer`
+- subject naming `TopicNameStrategy` (`weather_input-value`)
+- schema registry URL `http://127.0.0.1:8081`
+
+### generate Avro sources manually (optional)
+`./mvnw.cmd generate-sources`
 
 <br>
 <br>
@@ -27,9 +38,9 @@ I added a few commented lines, uncomment them and comment out
 `spring.kafka.bootstrap-servers=127.0.0.1:9092`  
 and then just start the app as normal
 
-sometimes kafka will not start up properly because some of the resources are already in use.\
-what helps me is just do a 
-`docker system prune` or even `docker system prune -a`
+If Schema Registry is unreachable, verify compose is running and check:
+- `docker compose ps`
+- `docker compose logs schema-registry`
 
 ##### start docker daemon if it is not already running
 start a linux terminal and run\
