@@ -37,6 +37,23 @@ services:
       retries: 12
       start_period: 20s
 
+  schema-registry:
+    image: confluentinc/cp-schema-registry:latest
+    platform: linux/amd64
+    container_name: schema-registry
+    networks:
+      - local-kafka
+    depends_on:
+      broker:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    restart: always
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://broker:29092
+
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     platform: linux/amd64
@@ -51,4 +68,5 @@ services:
     environment:
       - KAFKA_CLUSTERS_0_NAME=broker
       - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=broker:29092
+      - KAFKA_CLUSTERS_0_SCHEMAREGISTRY=http://schema-registry:8081
 

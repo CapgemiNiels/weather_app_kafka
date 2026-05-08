@@ -1,13 +1,13 @@
 package nh.weather_app_kafka.config;
 
-import nh.weather_app_kafka.model.CurrentWeather;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import nh.weather_app_kafka.avro.CurrentWeatherAvro;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
-import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -29,12 +29,13 @@ class ConfigurationTests {
         KafkaConfig kafkaConfig = new KafkaConfig();
         ReflectionTestUtils.setField(kafkaConfig, "bootstrapServers", "127.0.0.1:9092");
         ReflectionTestUtils.setField(kafkaConfig, "topicName", "weather-test-topic");
+        ReflectionTestUtils.setField(kafkaConfig, "schemaRegistryUrl", "http://127.0.0.1:8081");
 
         NewTopic topic = kafkaConfig.weatherInputTopic();
-        ProducerFactory<String, CurrentWeather> producerFactory = kafkaConfig.producerFactory();
-        KafkaTemplate<String, CurrentWeather> kafkaTemplate = kafkaConfig.kafkaTemplate();
-        DefaultKafkaProducerFactory<String, CurrentWeather> defaultKafkaProducerFactory =
-                (DefaultKafkaProducerFactory<String, CurrentWeather>) producerFactory;
+        ProducerFactory<String, CurrentWeatherAvro> producerFactory = kafkaConfig.producerFactory();
+        KafkaTemplate<String, CurrentWeatherAvro> kafkaTemplate = kafkaConfig.kafkaTemplate();
+        DefaultKafkaProducerFactory<String, CurrentWeatherAvro> defaultKafkaProducerFactory =
+                (DefaultKafkaProducerFactory<String, CurrentWeatherAvro>) producerFactory;
 
         assertEquals("weather-test-topic", topic.name());
         assertEquals(3, topic.numPartitions());
@@ -64,8 +65,12 @@ class ConfigurationTests {
                 defaultKafkaProducerFactory.getConfigurationProperties().get(ProducerConfig.CLIENT_ID_CONFIG));
         assertEquals(StringSerializer.class,
                 defaultKafkaProducerFactory.getConfigurationProperties().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
-        assertEquals(JacksonJsonSerializer.class,
+        assertEquals(KafkaAvroSerializer.class,
                 defaultKafkaProducerFactory.getConfigurationProperties().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+        assertEquals("http://127.0.0.1:8081",
+                defaultKafkaProducerFactory.getConfigurationProperties().get("schema.registry.url"));
+        assertEquals("io.confluent.kafka.serializers.subject.TopicNameStrategy",
+                defaultKafkaProducerFactory.getConfigurationProperties().get("value.subject.name.strategy"));
         assertNotNull(kafkaTemplate);
         assertNotNull(kafkaTemplate.getProducerFactory());
     }

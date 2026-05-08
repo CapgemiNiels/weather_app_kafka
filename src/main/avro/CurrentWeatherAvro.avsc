@@ -1,0 +1,37 @@
+{
+  "type": "record",
+  "name": "CurrentWeatherAvro",
+  "namespace": "nh.weather_app_kafka.avro",
+  "fields": [
+    {
+      "name": "time",
+      "type": "string",
+      "doc": "UTC-normalized ISO-8601 timestamp"
+    },
+    {
+      "name": "interval",
+      "type": "int"
+    },
+    {
+      "name": "temperature",
+      "type": "double"
+    },
+    {
+      "name": "windspeed",
+      "type": "double"
+    },
+    {
+      "name": "winddirection",
+      "type": "int"
+    },
+    {
+      "name": "is_day",
+      "type": "int"
+    },
+    {
+      "name": "weathercode",
+      "type": "int"
+    }
+  ]
+}
+

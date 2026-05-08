@@ -1,6 +1,8 @@
 package nh.weather_app_kafka.config;
 
-import nh.weather_app_kafka.model.CurrentWeather;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.subject.TopicNameStrategy;
+import nh.weather_app_kafka.avro.CurrentWeatherAvro;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -10,7 +12,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
-import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,14 +25,20 @@ public class KafkaConfig {
     @Value("${kafka.topic.name}")
     private String topicName;
 
+    @Value("${spring.kafka.producer.properties.schema.registry.url}")
+    private String schemaRegistryUrl;
+
     @Bean
-    public ProducerFactory<String, CurrentWeather> producerFactory() {
+    public ProducerFactory<String, CurrentWeatherAvro> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 
         // Serialization
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JacksonJsonSerializer.class);
+        configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);
+        configProps.put("schema.registry.url", schemaRegistryUrl);
+        configProps.put("value.subject.name.strategy", TopicNameStrategy.class.getName());
+        configProps.put("auto.register.schemas", true);
 
         // Local/dev reliability defaults
         configProps.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -58,7 +65,7 @@ public class KafkaConfig {
     }
 
     @Bean
-    public KafkaTemplate<String, CurrentWeather> kafkaTemplate() {
+    public KafkaTemplate<String, CurrentWeatherAvro> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
 
